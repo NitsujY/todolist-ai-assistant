@@ -1,8 +1,8 @@
-import { Task } from '../../../lib/MarkdownParser';
-import { AIPluginConfig } from '../config';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { generateText, streamText } from 'ai';
+import type { Task } from '../../../lib/MarkdownParser';
+import type { AIPluginConfig } from '../config';
+// import { createOpenAI } from '@ai-sdk/openai';
+// import { createGoogleGenerativeAI } from '@ai-sdk/google';
+// import { generateText, streamText } from 'ai';
 
 export interface LLMResponse {
   text: string;
@@ -17,7 +17,7 @@ export class LLMService {
 
   async generate(prompt: string, context: Task[]): Promise<string> {
     // TODO: Implement context serialization
-    const contextStr = JSON.stringify(context.map(t => ({ content: t.content, completed: t.completed })));
+    const contextStr = JSON.stringify(context.map(t => ({ content: t.text, completed: t.completed })));
     const fullPrompt = `Context: ${contextStr}\n\nUser: ${prompt}`;
 
     if (this.config.provider === 'private') {
@@ -39,6 +39,7 @@ export class LLMService {
     // const openai = createOpenAI({ apiKey: this.config.apiKey });
     // const { text } = await generateText({ model: openai('gpt-4-turbo'), prompt });
     // return text;
+    console.log('Calling provider with:', prompt);
     return "Provider integration pending.";
   }
 }

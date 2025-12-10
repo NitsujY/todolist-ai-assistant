@@ -10,14 +10,6 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({ isOpen, onCl
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
 
-  useEffect(() => {
-    if (isOpen) {
-      startListening();
-    } else {
-      stopListening();
-    }
-  }, [isOpen]);
-
   const startListening = () => {
     setIsListening(true);
     // TODO: Implement Web Speech API
@@ -28,6 +20,19 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({ isOpen, onCl
     setIsListening(false);
     console.log('Voice Mode: Stopped listening');
   };
+
+  useEffect(() => {
+    if (isOpen) {
+      startListening();
+    } else {
+      stopListening();
+    }
+  }, [isOpen]);
+
+  // Silence unused variable warnings for now
+  void onCommand;
+  void setTranscript;
+  void transcript;
 
   if (!isOpen) return null;
 

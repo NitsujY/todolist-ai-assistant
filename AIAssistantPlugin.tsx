@@ -1,38 +1,21 @@
-import React, { useState } from 'react';
-import { Plugin, PluginAPI } from '../../pluginEngine';
-import { VoiceModeOverlay } from './features/VoiceMode/VoiceModeOverlay';
-import { DEFAULT_CONFIG, AIPluginConfig } from './config';
-import { LLMService } from './services/LLMService';
+import React from 'react';
+import type { Plugin } from '../pluginEngine';
+import { VoiceModeButton } from './components/VoiceModeButton';
+// import { DEFAULT_CONFIG } from './config';
+// import { LLMService } from './services/LLMService';
 
 export const AIAssistantPlugin: Plugin = {
   name: 'AI Assistant',
-  id: 'ai-assistant',
-  version: '0.1.0',
-  description: 'AI-powered features including Voice Mode and Smart Tags.',
-  author: 'Justin Yu',
+  // id: 'ai-assistant', // Plugin interface doesn't have id, just name
+  // version: '0.1.0',
+  // description: 'AI-powered features including Voice Mode and Smart Tags.',
+  // author: 'Justin Yu',
   
-  renderHeaderButton: (api: PluginAPI) => {
-    const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
-
-    return (
-      <>
-        <button 
-          className="btn btn-ghost btn-sm btn-circle"
-          onClick={() => setIsVoiceModeOpen(true)}
-          title="Voice Mode"
-        >
-          ✨
-        </button>
-        <VoiceModeOverlay 
-          isOpen={isVoiceModeOpen} 
-          onClose={() => setIsVoiceModeOpen(false)}
-          onCommand={(text) => console.log('Command:', text)}
-        />
-      </>
-    );
+  renderHeaderButton: () => {
+    return <VoiceModeButton />;
   },
 
-  renderSettings: (api: PluginAPI) => {
+  renderSettings: () => {
     // TODO: Implement settings UI for API keys and provider selection
     return (
       <div className="space-y-4">
