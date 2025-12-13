@@ -8,7 +8,7 @@ export interface AIPluginConfig {
 }
 
 export const DEFAULT_CONFIG: AIPluginConfig = {
-  provider: 'private',
+  provider: 'openai',
   voiceModeEnabled: true,
   smartTagsEnabled: true,
 };
