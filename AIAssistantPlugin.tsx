@@ -1,6 +1,7 @@
 import type { Plugin } from '../pluginEngine';
 import { VoiceModeButton } from './components/VoiceModeButton';
 import { AISettings } from './components/AISettings';
+import { TaskBreakdownButton } from './components/TaskBreakdownButton';
 
 export const AIAssistantPlugin: Plugin = {
   name: 'AI Assistant',
@@ -11,6 +12,10 @@ export const AIAssistantPlugin: Plugin = {
   
   renderHeaderButton: () => {
     return <VoiceModeButton />;
+  },
+
+  renderTaskActionButton: (task) => {
+    return <TaskBreakdownButton task={task} />;
   },
 
   renderSettings: () => {

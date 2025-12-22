@@ -28,9 +28,38 @@ export class LLMService {
   }
 
   private async callPrivateEndpoint(prompt: string): Promise<string> {
-    // Mock implementation for now
+    // Minimal placeholder implementation. A real implementation should call a backend you control.
     console.log('Calling private endpoint with:', prompt);
-    return "This is a response from the private endpoint.";
+    if (!this.config.privateEndpointUrl) {
+      return 'Private endpoint URL is not configured.';
+    }
+
+    try {
+      const res = await fetch(this.config.privateEndpointUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.config.licenseKey ? { Authorization: `Bearer ${this.config.licenseKey}` } : {}),
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (res.status === 402 || res.status === 403) {
+        return 'Quota exceeded or unpaid plan. Please check your license.';
+      }
+
+      if (!res.ok) {
+        return `Private endpoint error (${res.status}).`;
+      }
+
+      const data = await res.json().catch(() => null);
+      if (data && typeof data.text === 'string') return data.text;
+      if (data && typeof data.response === 'string') return data.response;
+      return 'Private endpoint returned an unexpected response.';
+    } catch (e) {
+      console.error(e);
+      return 'Failed to reach private endpoint.';
+    }
   }
 
   private async callProvider(prompt: string): Promise<string> {

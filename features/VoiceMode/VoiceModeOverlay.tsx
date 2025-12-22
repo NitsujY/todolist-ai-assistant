@@ -4,11 +4,20 @@ interface VoiceModeOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   onCommand: (text: string) => void;
+  language?: string;
+  showTranscript?: boolean;
 }
 
-export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({ isOpen, onClose, onCommand }) => {
+export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
+  isOpen,
+  onClose,
+  onCommand,
+  language,
+  showTranscript = true,
+}) => {
   const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  const [finalTranscript, setFinalTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
   const recognitionRef = React.useRef<any>(null);
 
   const startListening = () => {
@@ -19,9 +28,9 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({ isOpen, onCl
 
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = language || navigator.language || 'en-US';
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -31,22 +40,35 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({ isOpen, onCl
     recognition.onend = () => {
       setIsListening(false);
       console.log('Voice Mode: Stopped listening');
-      // If we have a transcript, send it as a command. 
-      // Note: We need to access the latest state of transcript here, 
-      // but since this is a closure, we might get stale state.
-      // Better to rely on the event result or use a ref for transcript.
     };
 
     // We need to handle the final result in onresult to ensure we have the text
     recognition.onresult = (event: any) => {
-      const current = event.resultIndex;
-      const transcriptText = event.results[current][0].transcript;
-      setTranscript(transcriptText);
-      
-      if (event.results[current].isFinal) {
-         onCommand(transcriptText);
-         // Optional: Close overlay or restart listening?
-         // For now, let's keep it open but maybe stop listening to process
+      let interim = '';
+      let finalDelta = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const r = event.results[i];
+        const text = r?.[0]?.transcript || '';
+        if (r.isFinal) {
+          finalDelta += text;
+        } else {
+          interim += text;
+        }
+      }
+
+      if (finalDelta) {
+        setFinalTranscript(prev => (prev + finalDelta).trim());
+        setInterimTranscript('');
+        const full = (finalTranscript + ' ' + finalDelta).trim();
+        if (full) {
+          onCommand(full);
+          // Reset after dispatch so the user sees a fresh buffer
+          setFinalTranscript('');
+          setInterimTranscript('');
+        }
+      } else {
+        setInterimTranscript(interim.trim());
       }
     };
 
@@ -68,7 +90,8 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({ isOpen, onCl
 
   useEffect(() => {
     if (isOpen) {
-      setTranscript(''); // Clear previous transcript
+      setFinalTranscript('');
+      setInterimTranscript('');
       startListening();
     } else {
       stopListening();
@@ -81,12 +104,9 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({ isOpen, onCl
     };
   }, [isOpen]);
 
-  // Silence unused variable warnings for now
-  void onCommand;
-  void setTranscript;
-  void transcript;
-
   if (!isOpen) return null;
+
+  const displayTranscript = (finalTranscript + (interimTranscript ? ` ${interimTranscript}` : '')).trim();
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-base-100/95 backdrop-blur-sm">
@@ -107,7 +127,18 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({ isOpen, onCl
 
         <div className="space-y-2">
           <h2 className="text-2xl font-bold">I'm listening...</h2>
-          <p className="text-base-content/60">{transcript || "Say 'Add task buy milk'..."}</p>
+          {showTranscript ? (
+            <div className="w-full max-w-xl mx-auto">
+              <div className="text-left text-xs text-base-content/60 mb-1">Live transcript</div>
+              <div className="bg-base-200/50 border border-base-300 rounded-lg px-4 py-3 min-h-[64px]">
+                <div className="text-base-content/80 break-words">
+                  {displayTranscript || "Say: 'Add task buy milk'…"}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-base-content/60">Say: "Add task buy milk"…</p>
+          )}
         </div>
 
         <button 

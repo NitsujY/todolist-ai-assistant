@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { VoiceModeOverlay } from '../features/VoiceMode/VoiceModeOverlay';
 import { Bot } from 'lucide-react';
 import { useTodoStore } from '../../../store/useTodoStore';
+import { loadAIPluginConfig } from '../utils/configStorage';
 
 export const VoiceModeButton = () => {
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
   const addTask = useTodoStore(state => state.addTask);
+
+  const config = loadAIPluginConfig();
+  if (!config.voiceModeEnabled) return null;
 
   const handleCommand = (text: string) => {
     console.log('Received Voice Command:', text);
@@ -49,6 +53,8 @@ export const VoiceModeButton = () => {
         isOpen={isVoiceModeOpen} 
         onClose={() => setIsVoiceModeOpen(false)}
         onCommand={handleCommand}
+        language={config.speechLanguage === 'auto' ? undefined : config.speechLanguage}
+        showTranscript={config.showVoiceTranscript}
       />
     </>
   );
