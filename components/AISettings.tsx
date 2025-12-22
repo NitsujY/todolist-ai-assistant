@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings, X, Eye, EyeOff, Save, Key } from 'lucide-react';
-import { AIPluginConfig, DEFAULT_CONFIG } from '../config';
+import { DEFAULT_CONFIG } from '../config';
+import type { AIPluginConfig } from '../config';
 
 export const AISettings = () => {
   const [isOpen, setIsOpen] = useState(false);

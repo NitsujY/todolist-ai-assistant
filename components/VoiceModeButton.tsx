@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { VoiceModeOverlay } from '../features/VoiceMode/VoiceModeOverlay';
-import { Bot, Mic } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { useTodoStore } from '../../../store/useTodoStore';
 
 export const VoiceModeButton = () => {

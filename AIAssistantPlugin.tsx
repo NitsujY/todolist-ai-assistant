@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Plugin } from '../pluginEngine';
 import { VoiceModeButton } from './components/VoiceModeButton';
 import { AISettings } from './components/AISettings';
