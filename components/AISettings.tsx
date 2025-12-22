@@ -50,8 +50,8 @@ export const AISettings = () => {
             aria-label="Close AI settings"
           />
 
-          {/* Slide-out panel */}
-          <div className="absolute inset-y-0 right-0 w-full max-w-xl bg-base-100 shadow-2xl border-l border-base-200 flex flex-col">
+          {/* Full-screen settings page */}
+          <div className="absolute inset-0 w-full bg-base-100 shadow-2xl flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-base-200">
               <div>
                 <div className="font-semibold">AI Assistant</div>
@@ -80,6 +80,7 @@ export const AISettings = () => {
                     onChange={(e) => setConfig({ ...config, provider: e.target.value as AIPluginConfig['provider'] })}
                   >
                     <option value="openai">OpenAI</option>
+                    <option value="azure-openai">Azure OpenAI</option>
                     <option value="gemini">Google Gemini</option>
                     <option value="anthropic">Anthropic</option>
                     <option value="private">Private Endpoint (Managed)</option>
@@ -92,17 +93,19 @@ export const AISettings = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="form-control">
-                    <label className="label py-1">
-                      <span className="label-text">Model (optional)</span>
-                    </label>
-                    <input
-                      className="input input-bordered w-full"
-                      value={config.model || ''}
-                      onChange={(e) => setConfig({ ...config, model: e.target.value })}
-                      placeholder={config.provider === 'openai' ? 'gpt-4.1-mini' : 'leave blank'}
-                    />
-                  </div>
+                  {config.provider !== 'azure-openai' && (
+                    <div className="form-control">
+                      <label className="label py-1">
+                        <span className="label-text">Model (optional)</span>
+                      </label>
+                      <input
+                        className="input input-bordered w-full"
+                        value={config.model || ''}
+                        onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                        placeholder={config.provider === 'openai' ? 'gpt-4.1-mini' : 'leave blank'}
+                      />
+                    </div>
+                  )}
                   <div className="form-control">
                     <label className="label py-1">
                       <span className="label-text">Temperature</span>
@@ -119,6 +122,52 @@ export const AISettings = () => {
                     />
                   </div>
                 </div>
+
+                {config.provider === 'azure-openai' && (
+                  <div className="space-y-3">
+                    <div className="form-control">
+                      <label className="label py-1">
+                        <span className="label-text">Azure Endpoint</span>
+                      </label>
+                      <input
+                        className="input input-bordered w-full"
+                        value={config.azureEndpoint || ''}
+                        onChange={(e) => setConfig({ ...config, azureEndpoint: e.target.value })}
+                        placeholder="https://<resource>.openai.azure.com"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="form-control">
+                        <label className="label py-1">
+                          <span className="label-text">API Version</span>
+                        </label>
+                        <input
+                          className="input input-bordered w-full"
+                          value={config.azureApiVersion || ''}
+                          onChange={(e) => setConfig({ ...config, azureApiVersion: e.target.value })}
+                          placeholder="2024-06-01"
+                        />
+                      </div>
+
+                      <div className="form-control">
+                        <label className="label py-1">
+                          <span className="label-text">Deployment</span>
+                        </label>
+                        <input
+                          className="input input-bordered w-full"
+                          value={config.azureDeployment || ''}
+                          onChange={(e) => setConfig({ ...config, azureDeployment: e.target.value })}
+                          placeholder="my-gpt-4o-mini-deployment"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-base-content/60">
+                      Azure uses a <span className="font-mono">deployment name</span> (not a model name). Your key is still entered below.
+                    </div>
+                  </div>
+                )}
 
                 {config.provider === 'private' && (
                   <div className="form-control">

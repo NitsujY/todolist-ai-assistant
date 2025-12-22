@@ -1,10 +1,15 @@
 export interface AIPluginConfig {
-  provider: 'private' | 'openai' | 'gemini' | 'anthropic';
+  provider: 'private' | 'openai' | 'azure-openai' | 'gemini' | 'anthropic';
   apiKey?: string; // For BYOK
   model?: string;
   temperature?: number;
   privateEndpointUrl?: string;
   licenseKey?: string; // For private endpoint
+
+  // Azure OpenAI (BYOK)
+  azureEndpoint?: string; // e.g. https://<resource>.openai.azure.com
+  azureApiVersion?: string; // e.g. 2024-06-01
+  azureDeployment?: string; // deployment name in Azure OpenAI Studio
 
   voiceModeEnabled: boolean;
   speechToTextProvider: 'webSpeech' | 'whisper';
@@ -23,6 +28,9 @@ export const DEFAULT_CONFIG: AIPluginConfig = {
   provider: 'openai',
   model: '',
   temperature: 0.2,
+  azureEndpoint: '',
+  azureApiVersion: '',
+  azureDeployment: '',
   voiceModeEnabled: true,
   speechToTextProvider: 'webSpeech',
   speechLanguage: 'auto',

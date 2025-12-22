@@ -1,20 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Wand2 } from 'lucide-react';
 import type { Task } from '../../../lib/MarkdownParser';
 import { useTodoStore } from '../../../store/useTodoStore';
 import { loadAIPluginConfig } from '../utils/configStorage';
-import { LLMService } from '../services/LLMService';
-
-function parseSubtasks(text: string): string[] {
-  return text
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean)
-    .map(l => l.replace(/^[-*]\s+/, ''))
-    .map(l => l.replace(/^\d+\.?\s+/, ''))
-    .map(l => l.replace(/^\[\s?[xX]?\s?\]\s+/, ''))
-    .filter(Boolean);
-}
+import { generateTaskBreakdown } from '../features/taskBreakdown/taskBreakdown';
 
 export function TaskBreakdownButton({ task }: { task: Task }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,11 +16,6 @@ export function TaskBreakdownButton({ task }: { task: Task }) {
 
   const config = loadAIPluginConfig();
   const enabled = config.taskBreakdownEnabled;
-
-  const prompt = useMemo(() => {
-    const tpl = config.taskBreakdownPrompt || '';
-    return tpl.includes('{{task}}') ? tpl.replaceAll('{{task}}', task.text) : `${tpl}\n\nTask: ${task.text}`;
-  }, [config.taskBreakdownPrompt, task.text]);
 
   if (!enabled) return null;
   if (task.type !== 'task') return null;
@@ -53,19 +37,11 @@ export function TaskBreakdownButton({ task }: { task: Task }) {
 
     setIsWorking(true);
     try {
-      const llm = new LLMService(config);
-      const raw = await llm.generate(prompt, tasks);
-      let subtasks = parseSubtasks(raw);
-
-      // Look & feel first: if provider integration is not ready, show a sensible template.
-      if (subtasks.length === 0 || raw.includes('integration pending') || raw.includes('not configured')) {
-        subtasks = [
-          'Clarify goal and success criteria',
-          'List constraints and dependencies',
-          'Break into milestones',
-          'Define next 1–2 concrete actions',
-        ];
-      }
+      const { subtasks } = await generateTaskBreakdown({
+        taskText: task.text,
+        contextTasks: tasks,
+        config,
+      });
 
       setGenerated(subtasks);
       const nextSelected: Record<string, boolean> = {};
