@@ -16,6 +16,9 @@ export interface AIPluginConfig {
   speechLanguage: 'auto' | string;
   showVoiceTranscript: boolean;
 
+  /** Optional per-user overrides for Brain Dump scene labels (stored in localStorage). */
+  brainDumpSceneLabelsJson?: string;
+
   smartTagsEnabled: boolean;
 
   taskBreakdownEnabled: boolean;
@@ -35,6 +38,7 @@ export const DEFAULT_CONFIG: AIPluginConfig = {
   speechToTextProvider: 'webSpeech',
   speechLanguage: 'auto',
   showVoiceTranscript: true,
+  brainDumpSceneLabelsJson: '',
   smartTagsEnabled: true,
   taskBreakdownEnabled: true,
   taskBreakdownPrompt:

@@ -1,5 +1,5 @@
 import type { Plugin } from '../pluginEngine';
-import { VoiceModeButton } from './components/VoiceModeButton';
+import { BrainDumpButton } from './components/BrainDumpButton';
 import { AISettings } from './components/AISettings';
 import { TaskBreakdownButton } from './components/TaskBreakdownButton';
 
@@ -11,7 +11,7 @@ export const AIAssistantPlugin: Plugin = {
   // author: 'Justin Yu',
   
   renderHeaderButton: () => {
-    return <VoiceModeButton />;
+    return <BrainDumpButton />;
   },
 
   renderTaskActionButton: (task) => {

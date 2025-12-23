@@ -230,7 +230,7 @@ export const AISettings = () => {
               <div className="divider my-0" />
 
               <div className="space-y-3">
-                <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Voice</div>
+                <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Brain Dump</div>
 
                 <label className="label cursor-pointer justify-start gap-3">
                   <input
@@ -239,8 +239,21 @@ export const AISettings = () => {
                     checked={config.voiceModeEnabled}
                     onChange={(e) => setConfig({ ...config, voiceModeEnabled: e.target.checked })}
                   />
-                  <span className="label-text">Enable Voice Mode</span>
+                  <span className="label-text">Enable Brain Dump</span>
                 </label>
+
+                <button
+                  className="btn btn-sm btn-primary w-full"
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    window.dispatchEvent(new CustomEvent('ai:open-brain-dump'));
+                  }}
+                  disabled={!config.voiceModeEnabled}
+                  title={config.voiceModeEnabled ? 'Open Brain Dump' : 'Enable Brain Dump to open'}
+                >
+                  Open Brain Dump
+                </button>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="form-control">
@@ -282,6 +295,24 @@ export const AISettings = () => {
                   />
                   <span className="label-text">Show real-time transcript</span>
                 </label>
+
+                <details className="border border-base-200 rounded-xl p-3">
+                  <summary className="cursor-pointer text-sm">Advanced: Scene labels</summary>
+                  <div className="mt-3 form-control">
+                    <label className="label py-1">
+                      <span className="label-text">Scene label overrides (JSON)</span>
+                    </label>
+                    <textarea
+                      className="textarea textarea-bordered w-full min-h-[120px]"
+                      value={config.brainDumpSceneLabelsJson || ''}
+                      onChange={(e) => setConfig({ ...config, brainDumpSceneLabelsJson: e.target.value })}
+                      placeholder={`{\n  "brain-dump": "Brain Dump",\n  "project-brainstorm": "Brainstorm",\n  "dev-todo": "Dev TODO",\n  "daily-reminders": "Reminders"\n}`}
+                    />
+                    <div className="text-xs text-base-content/60 mt-1">
+                      Keys must be one of: brain-dump, project-brainstorm, dev-todo, daily-reminders.
+                    </div>
+                  </div>
+                </details>
               </div>
 
               <div className="divider my-0" />
