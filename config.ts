@@ -50,6 +50,6 @@ export const DEFAULT_CONFIG: AIPluginConfig = {
   smartTagsEnabled: true,
   taskBreakdownEnabled: true,
   taskBreakdownPrompt:
-    'Break down the task into 3–8 meaningful, do-able subtasks.\n\nRules:\n- Each line is a concrete action that can be done in one sitting (15–60 minutes).\n- Start each line with a strong verb (Draft, Call, Decide, Write, Fix, Test, Book…).\n- Avoid vague steps like "work on", "handle", "do research" unless you specify exactly what to produce.\n- Include an explicit first next action.\n- No numbering, no extra text.\n\nTask: {{task}}',
+    'If the task is already a single clear action (can be done in <5 minutes), return EXACTLY ONE line: the original task rewritten clearly.\n\nOtherwise break it into 3–6 meaningful, do-able subtasks.\n\nRules:\n- One line per subtask, no numbering, no extra text.\n- Start each line with a strong verb (Draft, Call, Decide, Write, Fix, Test, Book…).\n- Avoid vague steps like "work on", "handle", "do research" unless you specify exactly what to produce.\n- Include an explicit first next action.\n\nTask: {{task}}',
   chatEnabled: false,
 };

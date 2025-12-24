@@ -356,9 +356,20 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   };
 
   const handleAnalyze = () => {
+    // If the mic is still on, stop it first; otherwise the header stays on
+    // "Listening…" and results won't show while isListening is true.
+    if (isListening || wantListeningRef.current || recognitionRef.current) {
+      didStopRef.current = true;
+      stopListening('manual');
+      onStopListening?.();
+    }
+
     const typed = (demoTranscript || '').trim();
     const useTyped = typeInsteadOpen && typed.length > 0;
-    onAnalyze?.(useTyped ? { typedText: typed } : undefined);
+    // Defer a tick so any final transcript event/flush can land.
+    window.setTimeout(() => {
+      onAnalyze?.(useTyped ? { typedText: typed } : undefined);
+    }, 50);
   };
 
   if (brainDumpEnabled) {

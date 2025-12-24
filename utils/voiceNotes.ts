@@ -46,19 +46,28 @@ export function getVoiceCaptureLines(markdown: string): string[] {
 export function extractLatestVoiceSession(lines: string[]): { sessionId: string | null; sessionLines: string[] } {
   // Session marker format: [VOICE_SESSION 2025-12-22T17:00:00.000Z]
   const markerPrefix = '[VOICE_SESSION ';
-  let lastMarkerIndex = -1;
-  let lastSessionId: string | null = null;
 
-  for (let i = 0; i < lines.length; i++) {
+  const isMarker = (l: string) => l.startsWith(markerPrefix) && l.endsWith(']');
+
+  // Walk from the end so we can skip empty session markers.
+  for (let i = lines.length - 1; i >= 0; i--) {
     const l = lines[i];
-    if (l.startsWith(markerPrefix) && l.endsWith(']')) {
-      lastMarkerIndex = i;
-      lastSessionId = l.slice(markerPrefix.length, -1);
+    if (!isMarker(l)) continue;
+
+    const sessionId = l.slice(markerPrefix.length, -1);
+    const sessionLines: string[] = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      const next = lines[j];
+      if (isMarker(next)) break;
+      sessionLines.push(next);
     }
+
+    if (sessionLines.length === 0) continue;
+    return { sessionId, sessionLines };
   }
 
-  if (lastMarkerIndex === -1) return { sessionId: null, sessionLines: lines };
-  return { sessionId: lastSessionId, sessionLines: lines.slice(lastMarkerIndex + 1) };
+  // No session markers (or only empty ones): treat everything as one session.
+  return { sessionId: null, sessionLines: lines.filter(l => !isMarker(l)) };
 }
 
 export function upsertVoiceSummary(markdown: string, bulletLines: string[]): string {

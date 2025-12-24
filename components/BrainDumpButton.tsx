@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { VoiceModeOverlay } from '../features/VoiceMode/VoiceModeOverlay';
-import { Bot } from 'lucide-react';
+import { Mic, Trash2 } from 'lucide-react';
 import { useTodoStore } from '../../../store/useTodoStore';
 import { loadAIPluginConfig } from '../utils/configStorage';
 import { appendToVoiceCaptureSection, extractLatestVoiceSession, getVoiceCaptureLines } from '../utils/voiceNotes';
 import type { BrainDumpResult, BrainDumpSceneId } from '../features/VoiceMode/brainDumpMock';
 import { mockBrainDumpResult } from '../features/VoiceMode/brainDumpMock';
+import { generateBrainDumpResultLLM } from '../features/VoiceMode/brainDumpLLM';
+import { generateTaskMergePlan, type TaskMergeAction } from '../features/taskMerge/taskMerge';
+import { clearBrainDumpHistory, readBrainDumpHistory, upsertBrainDumpHistory } from '../utils/brainDumpHistory';
 
 export const BrainDumpButton = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,6 +16,7 @@ export const BrainDumpButton = () => {
   const updateMarkdown = useTodoStore(state => state.updateMarkdown);
   const [stage, setStage] = useState<'listening' | 'processing' | 'done'>('listening');
   const tasks = useTodoStore(state => state.tasks);
+  const [autoStartOnOpen, setAutoStartOnOpen] = useState(true);
 
   const [sceneId, setSceneId] = useState<BrainDumpSceneId>('brain-dump');
   const [brainDumpResult, setBrainDumpResult] = useState<BrainDumpResult | null>(null);
@@ -29,15 +33,53 @@ export const BrainDumpButton = () => {
   const config = loadAIPluginConfig();
   if (!config.voiceModeEnabled) return null;
 
-  const openBrainDump = () => {
+  const persistedHistory = useMemo(() => readBrainDumpHistory(markdown), [markdown]);
+
+  const openBrainDumpNew = () => {
     const latest = loadAIPluginConfig();
+    setAutoStartOnOpen(true);
     setIsOpen(true);
     setStage('listening');
     sessionStartedRef.current = false;
     setBrainDumpResult(null);
     setSelectedTaskIds([]);
+    setKbText('');
+    setSystemPrompt('');
+    setDemoTranscript('');
     setSceneId((latest.brainDumpDefaultSceneId as BrainDumpSceneId) || 'brain-dump');
     setIncludeCompletedInContext(latest.brainDumpIncludeCompletedByDefault ?? true);
+  };
+
+  const openBrainDumpResume = () => {
+    const h = persistedHistory;
+    if (!h) return;
+    // Open the Brain Dump page without starting analysis or auto-listening.
+    // User can tap the mic control inside the overlay when they want.
+    setAutoStartOnOpen(false);
+    setIsOpen(true);
+    setStage('done');
+    sessionStartedRef.current = false;
+    setSceneId(h.result.sceneId);
+    setIncludeCompletedInContext(h.includeCompletedInContext);
+    setKbText(h.kbText);
+    setSystemPrompt(h.systemPrompt);
+    setBrainDumpResult(h.result);
+    setSelectedTaskIds(h.selectedTaskIds.length ? h.selectedTaskIds : h.result.tasks.map(t => t.id));
+    setDemoTranscript(h.result.transcript || '');
+  };
+
+  const openBrainDump = () => {
+    if (persistedHistory) openBrainDumpResume();
+    else openBrainDumpNew();
+  };
+
+  const clearSavedSuggestions = async () => {
+    const next = clearBrainDumpHistory(useTodoStore.getState().markdown);
+    await updateMarkdown(next);
+    // Keep UI state minimal/clean.
+    setBrainDumpResult(null);
+    setSelectedTaskIds([]);
+    setStage('listening');
   };
 
   const sceneLabelOverrides = useMemo(() => {
@@ -82,7 +124,9 @@ export const BrainDumpButton = () => {
     if (lines.length === 0) return;
     pendingLinesRef.current = [];
 
-    let next = markdown;
+    // Use the freshest markdown to avoid overwriting concurrent updates
+    // (e.g. session marker insertion) with a stale render snapshot.
+    let next = useTodoStore.getState().markdown;
     for (const l of lines) {
       next = appendToVoiceCaptureSection(next, l);
     }
@@ -104,16 +148,14 @@ export const BrainDumpButton = () => {
   }, []);
 
   const handleFinalTranscript = (text: string) => {
+    if (!sessionStartedRef.current) {
+      sessionStartedRef.current = true;
+      const ts = new Date().toISOString();
+      pendingLinesRef.current.push(`[VOICE_SESSION ${ts}]`);
+    }
     const ts = new Date().toISOString();
     pendingLinesRef.current.push(`[${ts}] ${text}`);
     scheduleFlush();
-  };
-
-  const ensureSessionStarted = async () => {
-    if (sessionStartedRef.current) return;
-    sessionStartedRef.current = true;
-    const ts = new Date().toISOString();
-    await updateMarkdown(appendToVoiceCaptureSection(useTodoStore.getState().markdown, `[VOICE_SESSION ${ts}]`));
   };
 
   const formatTaskText = (t: { title: string; tags?: string[]; dueDate?: string }) => {
@@ -125,6 +167,8 @@ export const BrainDumpButton = () => {
   const handleAnalyze = async (payload?: { typedText?: string }) => {
     setStage('processing');
     await flushPending();
+
+    const latestConfig = loadAIPluginConfig();
 
     const typedText = payload?.typedText?.trim();
     const transcript = typedText
@@ -140,7 +184,38 @@ export const BrainDumpButton = () => {
             .trim();
         })();
 
-    const result = mockBrainDumpResult({ transcript, sceneId });
+    const contextTasks = (includeCompletedInContext ? tasks : tasks.filter(t => !t.completed)).slice(0, 50);
+
+    let result: BrainDumpResult;
+    try {
+      result = await generateBrainDumpResultLLM({
+        inputText: transcript,
+        sceneId,
+        contextTasks,
+        kbText,
+        systemPrompt,
+        config: latestConfig,
+      });
+    } catch (e) {
+      console.error('Brain Dump LLM failed, falling back to mock', e);
+      result = mockBrainDumpResult({ transcript, sceneId });
+    }
+
+    // Persist last result so the user can resume later without making an AI call.
+    try {
+      const historyMarkdown = upsertBrainDumpHistory(useTodoStore.getState().markdown, {
+        updatedAt: new Date().toISOString(),
+        result,
+        selectedTaskIds: result.tasks.map(t => t.id),
+        includeCompletedInContext,
+        kbText,
+        systemPrompt,
+      });
+      await updateMarkdown(historyMarkdown);
+    } catch (e) {
+      console.warn('Failed to persist Brain Dump history', e);
+    }
+
     setBrainDumpResult(result);
     setSelectedTaskIds(result.tasks.map(t => t.id));
     setStage('done');
@@ -163,11 +238,85 @@ export const BrainDumpButton = () => {
     if (toApply.length === 0) return;
 
     const store = useTodoStore.getState();
-    for (const t of toApply) {
-      await store.addTask(formatTaskText(t));
+
+    const configForApply = loadAIPluginConfig();
+    const suggestions = toApply.map(t => formatTaskText(t));
+
+    const applyAction = async (action: TaskMergeAction) => {
+      const currentTasks = useTodoStore.getState().tasks;
+
+      const resolveTaskId = (taskId?: string, taskLine?: number): string | undefined => {
+        if (typeof taskLine === 'number' && Number.isFinite(taskLine)) {
+          const byLine = currentTasks.find(t => t.type === 'task' && t.id.startsWith(`${taskLine}-`));
+          if (byLine) return byLine.id;
+        }
+        if (taskId) {
+          // Best-effort: if the exact id no longer exists, try by line prefix.
+          if (currentTasks.some(t => t.id === taskId)) return taskId;
+          const m = taskId.match(/^(\d+)-/);
+          if (m) {
+            const byLine = currentTasks.find(t => t.type === 'task' && t.id.startsWith(`${m[1]}-`));
+            if (byLine) return byLine.id;
+          }
+        }
+        return undefined;
+      };
+
+      if (action.type === 'add_task') {
+        await store.addTask(action.text);
+        return;
+      }
+
+      if (action.type === 'update_task_text') {
+        const targetId = resolveTaskId(action.targetTaskId, action.targetTaskLine);
+        if (!targetId) return;
+        await store.updateTaskText(targetId, action.newText);
+        return;
+      }
+
+      if (action.type === 'add_subtasks') {
+        const targetId = resolveTaskId(action.targetTaskId, action.targetTaskLine);
+        if (!targetId) return;
+        const targetTask = currentTasks.find(t => t.id === targetId);
+        const existingDesc = (targetTask?.description || '').trim();
+        const subtaskBlock = action.subtasks.map(s => `- [ ] ${s}`).join('\n');
+        const nextDesc = existingDesc ? `${existingDesc}\n\n${subtaskBlock}` : subtaskBlock;
+        await store.updateTaskDescription(targetId, nextDesc);
+        return;
+      }
+    };
+
+    try {
+      const plan = await generateTaskMergePlan({
+        userInput: (brainDumpResult.transcript || '').trim() || suggestions.join(' '),
+        suggestions,
+        existingTasks: (includeCompletedInContext ? tasks : tasks.filter(t => !t.completed)).slice(0, 80),
+        config: configForApply,
+      });
+
+      if (plan.actions.length > 0) {
+        for (const action of plan.actions) {
+          // noop is intentionally a no-op
+          if (action.type === 'noop') continue;
+          await applyAction(action);
+        }
+      } else {
+        // Fallback: old behavior
+        for (const t of toApply) {
+          await store.addTask(formatTaskText(t));
+        }
+      }
+    } catch (e) {
+      console.error('Task merge plan failed, falling back to addTask', e);
+      for (const t of toApply) {
+        await store.addTask(formatTaskText(t));
+      }
     }
 
+    // After apply: return to list view. Resume remains available via the
+    // persistent bottom bar backed by markdown history.
     setStage('done');
+    setIsOpen(false);
   };
 
   const contextPreviewLines = useMemo(() => {
@@ -190,34 +339,61 @@ export const BrainDumpButton = () => {
 
   return (
     <>
-      <button
-        className="btn btn-ghost btn-xs btn-square text-base-content/60 hover:text-primary"
-        onClick={() => {
-          openBrainDump();
-        }}
-        title="Brain Dump"
-      >
-        <Bot size={18} />
-      </button>
+      {!isOpen ? (
+        <div className="fixed left-1/2 bottom-3 -translate-x-1/2 z-40 w-[min(48rem,calc(100vw-1.5rem))]">
+          <div className="border border-base-300 rounded-2xl bg-base-100 shadow-lg px-3 py-2 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate">Brain Dump</div>
+              <div className="text-xs text-base-content/60 truncate">
+                {persistedHistory
+                  ? `Saved — ${persistedHistory.result.tasks.length} suggestion${persistedHistory.result.tasks.length === 1 ? '' : 's'}`
+                  : 'Tap mic to start'}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {persistedHistory ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm btn-circle"
+                  title="Clear saved suggestions"
+                  onClick={() => {
+                    void clearSavedSuggestions();
+                  }}
+                >
+                  <Trash2 size={18} />
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                className="btn btn-sm btn-circle"
+                title="Open Brain Dump"
+                onClick={() => {
+                  openBrainDump();
+                }}
+              >
+                <Mic size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <VoiceModeOverlay
         isOpen={isOpen}
         onClose={() => {
+          void flushPending();
           setIsOpen(false);
-          setStage('listening');
-          sessionStartedRef.current = false;
+          // Minimize behavior: keep stage/results so reopening is instant.
         }}
         onFinalTranscript={handleFinalTranscript}
         onStopListening={() => setStage('listening')}
         onAnalyze={handleAnalyze}
-        onStart={() => {
-          void ensureSessionStarted();
-        }}
         language={config.speechLanguage === 'auto' ? undefined : config.speechLanguage}
         showTranscript={config.showVoiceTranscript}
         stage={stage}
         anchorId="todo-list-shell"
-        autoStartListening={true}
+        autoStartListening={autoStartOnOpen}
 
         brainDumpEnabled={true}
         sceneId={sceneId}
