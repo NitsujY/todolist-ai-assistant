@@ -296,6 +296,37 @@ export const AISettings = () => {
                   <span className="label-text">Show real-time transcript</span>
                 </label>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="form-control">
+                    <label className="label py-1">
+                      <span className="label-text">Default scene</span>
+                    </label>
+                    <select
+                      className="select select-bordered w-full"
+                      value={config.brainDumpDefaultSceneId || 'brain-dump'}
+                      onChange={(e) => setConfig({ ...config, brainDumpDefaultSceneId: e.target.value as AIPluginConfig['brainDumpDefaultSceneId'] })}
+                      disabled={!config.voiceModeEnabled}
+                    >
+                      <option value="brain-dump">Brain Dump</option>
+                      <option value="project-brainstorm">Project Brainstorm</option>
+                      <option value="dev-todo">Development TODO</option>
+                      <option value="daily-reminders">Daily Reminders</option>
+                    </select>
+                    <div className="text-xs text-base-content/60 mt-1">Used when opening Brain Dump.</div>
+                  </div>
+
+                  <label className="label cursor-pointer justify-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-primary toggle-sm"
+                      checked={config.brainDumpIncludeCompletedByDefault ?? true}
+                      onChange={(e) => setConfig({ ...config, brainDumpIncludeCompletedByDefault: e.target.checked })}
+                      disabled={!config.voiceModeEnabled}
+                    />
+                    <span className="label-text">Include completed in context</span>
+                  </label>
+                </div>
+
                 <details className="border border-base-200 rounded-xl p-3">
                   <summary className="cursor-pointer text-sm">Advanced: Scene labels</summary>
                   <div className="mt-3 form-control">

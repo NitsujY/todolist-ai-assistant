@@ -9,7 +9,7 @@ interface VoiceModeOverlayProps {
   /** Called when voice capture stops (manual stop or recognition ended). Does NOT imply analysis. */
   onStopListening?: () => void;
   /** Called when user explicitly requests Brain Dump analysis. */
-  onAnalyze?: () => void;
+  onAnalyze?: (payload?: { typedText?: string }) => void;
   onStart?: () => void;
   language?: string;
   showTranscript?: boolean;
@@ -58,9 +58,9 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   autoStartListening = true,
 
   brainDumpEnabled = false,
-  sceneId,
-  onSceneChange,
-  sceneLabelOverrides,
+  sceneId: _sceneId,
+  onSceneChange: _onSceneChange,
+  sceneLabelOverrides: _sceneLabelOverrides,
   brainDumpResult,
   selectedTaskIds,
   onToggleTaskSelected,
@@ -71,10 +71,10 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
 
   demoTranscript,
   onDemoTranscriptChange,
-  onGeneratePreview,
+  onGeneratePreview: _onGeneratePreview,
 
-  includeCompletedInContext,
-  onIncludeCompletedInContextChange,
+  includeCompletedInContext: _includeCompletedInContext,
+  onIncludeCompletedInContextChange: _onIncludeCompletedInContextChange,
 
   systemPrompt: _systemPrompt,
   onSystemPromptChange: _onSystemPromptChange,
@@ -85,6 +85,8 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   const [micAutoPaused, setMicAutoPaused] = useState(false);
   const [micSupportError, setMicSupportError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [typeInsteadOpen, setTypeInsteadOpen] = useState(false);
+  const typingTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const recognitionRef = React.useRef<any>(null);
   const didStopRef = useRef(false);
   const manualStopRef = useRef(false);
@@ -126,6 +128,17 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       setMicSupportError('Speech recognition is not supported in this browser.');
       return;
+    }
+
+    // Ensure we don't leave a previous recognition instance running.
+    if (recognitionRef.current) {
+      try {
+        if (typeof recognitionRef.current.abort === 'function') recognitionRef.current.abort();
+        else recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      recognitionRef.current = null;
     }
 
     // User intent is "keep listening" unless they manually stop.
@@ -230,8 +243,21 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
       manualStopRef.current = true;
       wantListeningRef.current = false;
     }
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
+    const recognition = recognitionRef.current;
+    if (recognition) {
+      try {
+        // abort() tends to stop more immediately than stop() and is better for "pause now" UX.
+        if (typeof recognition.abort === 'function') recognition.abort();
+        else recognition.stop();
+      } catch {
+        // ignore
+      }
+      try {
+        recognition.stop();
+      } catch {
+        // ignore
+      }
+      recognitionRef.current = null;
     }
     setIsListening(false);
   };
@@ -256,7 +282,13 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
     // Cleanup
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          if (typeof recognitionRef.current.abort === 'function') recognitionRef.current.abort();
+          else recognitionRef.current.stop();
+        } catch {
+          // ignore
+        }
+        recognitionRef.current = null;
       }
     };
   }, [isOpen]);
@@ -270,6 +302,28 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, anchorId]);
+
+  const autosizeTypingTextarea = () => {
+    const el = typingTextareaRef.current;
+    if (!el) return;
+    // Reset then measure to fit content without inner scrolling.
+    el.style.height = '0px';
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!typeInsteadOpen) return;
+    // Defer a tick so layout is stable (details open / content mounted).
+    window.setTimeout(() => autosizeTypingTextarea(), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, typeInsteadOpen]);
+
+  useEffect(() => {
+    if (!typeInsteadOpen) return;
+    autosizeTypingTextarea();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoTranscript, typeInsteadOpen]);
 
   if (!isOpen) return null;
 
@@ -286,6 +340,15 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
     startListening();
   };
 
+  const pauseForTyping = () => {
+    // Treat switching to typing as a manual pause of the mic.
+    if (isListening || wantListeningRef.current || recognitionRef.current) {
+      didStopRef.current = true;
+      stopListening('manual');
+      onStopListening?.();
+    }
+  };
+
   const handleStop = () => {
     didStopRef.current = true;
     stopListening('manual');
@@ -293,12 +356,13 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   };
 
   const handleAnalyze = () => {
-    onAnalyze?.();
+    const typed = (demoTranscript || '').trim();
+    const useTyped = typeInsteadOpen && typed.length > 0;
+    onAnalyze?.(useTyped ? { typedText: typed } : undefined);
   };
 
   if (brainDumpEnabled) {
     const showResults = !isListening && stage === 'done' && !!brainDumpResult;
-    const showPostFinishOptions = stage === 'done';
     const isDesktopReviewFullScreen = !isMobile && stage === 'done' && !isListening;
 
     return (
@@ -368,45 +432,6 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
 
           {showResults ? (
             <div className="space-y-3">
-              {/* Post-finish options (kept out of the capture view) */}
-              {showPostFinishOptions ? (
-                <div className="border border-base-300 rounded-xl p-3 bg-base-100">
-                  <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Options</div>
-                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs text-base-content/60 shrink-0">Scene</span>
-                      <select
-                        className="select select-bordered select-sm w-full"
-                        value={sceneId || 'brain-dump'}
-                        onChange={(e) => onSceneChange?.(e.target.value as BrainDumpSceneId)}
-                        disabled={!onSceneChange}
-                        title="Scene (changes how tasks are extracted)"
-                      >
-                        <option value="brain-dump">{sceneLabelOverrides?.['brain-dump'] || 'Brain Dump'}</option>
-                        <option value="project-brainstorm">{sceneLabelOverrides?.['project-brainstorm'] || 'Project Brainstorm'}</option>
-                        <option value="dev-todo">{sceneLabelOverrides?.['dev-todo'] || 'Development TODO'}</option>
-                        <option value="daily-reminders">{sceneLabelOverrides?.['daily-reminders'] || 'Daily Reminders'}</option>
-                      </select>
-                    </label>
-
-                    <label
-                      className="label cursor-pointer gap-2 py-0 justify-start sm:justify-end"
-                      title="Include completed tasks in context (helps avoid duplicate suggestions)"
-                    >
-                      <span className="label-text text-xs text-base-content/60">Include completed</span>
-                      <input
-                        type="checkbox"
-                        className="toggle toggle-xs toggle-primary"
-                        checked={!!includeCompletedInContext}
-                        onChange={(e) => onIncludeCompletedInContextChange?.(e.target.checked)}
-                        disabled={!onIncludeCompletedInContextChange}
-                      />
-                    </label>
-                  </div>
-                  <div className="text-xs text-base-content/50 mt-2">Change options and tap Finish again to re-run.</div>
-                </div>
-              ) : null}
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="border border-base-300 rounded-xl p-3 bg-base-100">
                   <div className="flex items-center justify-between gap-2">
@@ -454,7 +479,7 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
                 </div>
 
                 <div className="border border-base-300 rounded-xl p-3 bg-base-100">
-                  <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Clear mind</div>
+                    <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Next actions</div>
                   <div className="mt-2 space-y-3">
                     <ul className="text-sm text-base-content/80 list-disc pl-5 space-y-1">
                       {brainDumpResult.summaryBullets.map((b, i) => (
@@ -462,7 +487,7 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
                       ))}
                     </ul>
                     <ul className="text-sm text-base-content/80 list-disc pl-5 space-y-1">
-                      {brainDumpResult.mindClearingHints.map((b, i) => (
+                        {brainDumpResult.nextActions.map((b, i) => (
                         <li key={`h_${i}`} className="break-words">{b}</li>
                       ))}
                     </ul>
@@ -472,46 +497,83 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
             </div>
           ) : null}
 
-          {/* Typed input remains a fallback, hidden until after finish */}
-          {showPostFinishOptions ? (
-            <details
-              className="border border-base-300 rounded-xl p-3 bg-base-100"
-              onToggle={(e) => {
-                const el = e.currentTarget as HTMLDetailsElement;
-                if (!el.open) return;
-                if (!isListening) return;
-                didStopRef.current = true;
-                stopListening();
-                setFinalTranscript('');
-                setInterimTranscript('');
-              }}
-            >
-              <summary className="cursor-pointer text-xs font-semibold text-base-content/70 uppercase tracking-wider">Type instead</summary>
-              <div className="mt-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Preview</div>
+          {/* Typing mode: lets the user edit the same input as voice (collapsed by default). */}
+          <details
+            className="border border-base-300 rounded-xl p-3 bg-base-100"
+            onToggle={(e) => {
+              const el = e.currentTarget as HTMLDetailsElement;
+              setTypeInsteadOpen(el.open);
+              if (!el.open) return;
+              // If the user chooses to type, pause the mic.
+              pauseForTyping();
+
+              // If there isn't typed input yet, seed it from the current transcript so typing
+              // feels like editing the same input (true combined input).
+              if (!(demoTranscript ?? '').trim()) {
+                const seeded = displayTranscript.trim();
+                if (seeded) onDemoTranscriptChange?.(seeded);
+              }
+            }}
+          >
+            <summary className="cursor-pointer text-xs font-semibold text-base-content/70 uppercase tracking-wider">Use typing</summary>
+            <div className="mt-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Edit input</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xs text-base-content/50">
+                    {stage === 'processing'
+                      ? 'Analyzing…'
+                      : stage === 'done'
+                        ? 'Edit and update results'
+                        : 'Type, then finish'}
+                  </div>
                   <button
-                    className="btn btn-xs btn-primary"
-                    onClick={() => onGeneratePreview?.()}
-                    disabled={!onGeneratePreview}
                     type="button"
+                    className="btn btn-xs btn-outline"
+                    onClick={handleAnalyze}
+                    disabled={!onAnalyze || stage === 'processing' || !(demoTranscript ?? '').trim()}
+                    title={stage === 'done' ? 'Update results from typed text' : 'Finish and analyze typed text'}
                   >
-                    Generate
+                    {stage === 'done' ? 'Update results' : 'Finish'}
                   </button>
                 </div>
-                <textarea
-                  className="textarea textarea-bordered w-full min-h-[88px] mt-2"
-                  value={demoTranscript ?? ''}
-                  onChange={(e) => onDemoTranscriptChange?.(e.target.value)}
-                  placeholder="Type or paste a brain dump…"
-                />
               </div>
-            </details>
-          ) : null}
+              <textarea
+                ref={typingTextareaRef}
+                className={`textarea textarea-bordered w-full mt-2 overflow-y-hidden ${
+                  stage === 'done' ? 'min-h-[35vh] sm:min-h-[40vh]' : 'min-h-[160px] sm:min-h-[220px]'
+                }`}
+                value={demoTranscript ?? ''}
+                onChange={(e) => {
+                  onDemoTranscriptChange?.(e.target.value);
+                  // Keep it feeling like a single scroll area.
+                  window.setTimeout(() => autosizeTypingTextarea(), 0);
+                }}
+                onFocus={() => {
+                  // Safety: focusing the editor should always stop the mic.
+                  pauseForTyping();
+                }}
+                placeholder="Type or edit your brain dump input…"
+              />
+            </div>
+          </details>
         </div>
 
         {/* Fixed bottom controls (no overlap with transcript) */}
         <div className="border-t border-base-200 px-4 py-3">
+          {/* Single primary action when paused (no A/B buttons) */}
+          {!isListening && stage !== 'processing' && stage !== 'done' ? (
+            <button
+              type="button"
+              className="btn btn-primary w-full mb-3"
+              onClick={handleAnalyze}
+              disabled={!onAnalyze}
+              title="Finish and run Brain Dump"
+            >
+              Finish
+            </button>
+          ) : null}
+
           <div className="relative h-20 flex items-center">
             {/* Center mic control stays centered even when Finish is visible */}
             <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
@@ -543,32 +605,7 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
               </div>
             </div>
 
-            {/* Finish actions (appear only when paused/finished) */}
-            <div className="ml-auto flex items-center gap-2">
-              {!isListening && stage !== 'processing' && stage !== 'done' ? (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-primary rounded-full"
-                  onClick={handleAnalyze}
-                  disabled={!onAnalyze}
-                  title="Finish and run Brain Dump"
-                >
-                  Finish
-                </button>
-              ) : null}
-
-              {!isListening && stage === 'done' ? (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline rounded-full"
-                  onClick={handleAnalyze}
-                  disabled={!onAnalyze}
-                  title="Re-run finish"
-                >
-                  Finish again
-                </button>
-              ) : null}
-            </div>
+            {/* No competing A/B button here; Finish/Update lives in review Options */}
           </div>
         </div>
         </div>

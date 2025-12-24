@@ -19,7 +19,7 @@ export const BrainDumpButton = () => {
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [kbText, setKbText] = useState<string>('');
   const [systemPrompt, setSystemPrompt] = useState<string>('');
-  const [includeCompletedInContext, setIncludeCompletedInContext] = useState<boolean>(false);
+  const [includeCompletedInContext, setIncludeCompletedInContext] = useState<boolean>(true);
   const [demoTranscript, setDemoTranscript] = useState<string>('');
 
   const pendingLinesRef = useRef<string[]>([]);
@@ -28,6 +28,17 @@ export const BrainDumpButton = () => {
 
   const config = loadAIPluginConfig();
   if (!config.voiceModeEnabled) return null;
+
+  const openBrainDump = () => {
+    const latest = loadAIPluginConfig();
+    setIsOpen(true);
+    setStage('listening');
+    sessionStartedRef.current = false;
+    setBrainDumpResult(null);
+    setSelectedTaskIds([]);
+    setSceneId((latest.brainDumpDefaultSceneId as BrainDumpSceneId) || 'brain-dump');
+    setIncludeCompletedInContext(latest.brainDumpIncludeCompletedByDefault ?? true);
+  };
 
   const sceneLabelOverrides = useMemo(() => {
     if (!config.brainDumpSceneLabelsJson) return {} as Partial<Record<BrainDumpSceneId, string>>;
@@ -46,15 +57,7 @@ export const BrainDumpButton = () => {
   }, [config.brainDumpSceneLabelsJson]);
 
   useEffect(() => {
-    const open = () => {
-      setIsOpen(true);
-      setStage('listening');
-      sessionStartedRef.current = false;
-      setBrainDumpResult(null);
-      setSelectedTaskIds([]);
-    };
-
-    const onOpenEvent = () => open();
+    const onOpenEvent = () => openBrainDump();
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       // Cmd/Ctrl+Shift+B opens Brain Dump
@@ -63,7 +66,7 @@ export const BrainDumpButton = () => {
       if (!(isMacOrCmd || isCtrl)) return;
       if (!e.shiftKey) return;
       if (e.key.toLowerCase() !== 'b') return;
-      open();
+      openBrainDump();
     };
 
     window.addEventListener('ai:open-brain-dump', onOpenEvent as EventListener);
@@ -119,19 +122,23 @@ export const BrainDumpButton = () => {
     return `${t.title}${tagSuffix}${dueSuffix}`.trim();
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (payload?: { typedText?: string }) => {
     setStage('processing');
     await flushPending();
 
-    const latestMarkdown = useTodoStore.getState().markdown;
-    const lines = getVoiceCaptureLines(latestMarkdown);
-    const { sessionLines } = extractLatestVoiceSession(lines);
-
-    const transcript = sessionLines
-      .map(l => l.replace(/^\[[^\]]+\]\s*/, '').trim())
-      .filter(Boolean)
-      .join(' ')
-      .trim();
+    const typedText = payload?.typedText?.trim();
+    const transcript = typedText
+      ? typedText
+      : (() => {
+          const latestMarkdown = useTodoStore.getState().markdown;
+          const lines = getVoiceCaptureLines(latestMarkdown);
+          const { sessionLines } = extractLatestVoiceSession(lines);
+          return sessionLines
+            .map(l => l.replace(/^\[[^\]]+\]\s*/, '').trim())
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+        })();
 
     const result = mockBrainDumpResult({ transcript, sceneId });
     setBrainDumpResult(result);
@@ -186,8 +193,7 @@ export const BrainDumpButton = () => {
       <button
         className="btn btn-ghost btn-xs btn-square text-base-content/60 hover:text-primary"
         onClick={() => {
-          setIsOpen(true);
-          setStage('listening');
+          openBrainDump();
         }}
         title="Brain Dump"
       >

@@ -17,7 +17,7 @@ export type BrainDumpClarifyingQuestion = {
 export type BrainDumpResult = {
   sceneId: BrainDumpSceneId;
   summaryBullets: string[];
-  mindClearingHints: string[];
+  nextActions: string[];
   clarifyingQuestions: BrainDumpClarifyingQuestion[];
   tasks: BrainDumpTaskSuggestion[];
   transcript: string;
@@ -39,22 +39,22 @@ const pickSceneHints = (sceneId: BrainDumpSceneId) => {
     case 'dev-todo':
       return {
         defaultTags: ['dev'],
-        hintPrefix: 'To unblock yourself:',
+        hintPrefix: 'Next actions:',
       };
     case 'project-brainstorm':
       return {
         defaultTags: ['project'],
-        hintPrefix: 'To clarify the direction:',
+        hintPrefix: 'Next actions:',
       };
     case 'daily-reminders':
       return {
         defaultTags: ['reminder'],
-        hintPrefix: 'To reduce mental load:',
+        hintPrefix: 'Next actions:',
       };
     default:
       return {
         defaultTags: [],
-        hintPrefix: 'To clear your mind:',
+        hintPrefix: 'Next actions:',
       };
   }
 };
@@ -120,10 +120,8 @@ export function mockBrainDumpResult(opts: { transcript: string; sceneId: BrainDu
   const tasks = inferTasksFromSentences(sentences, opts.sceneId);
 
   const hints: string[] = [];
-  const { hintPrefix } = pickSceneHints(opts.sceneId);
-
   if (tasks.length > 0) {
-    hints.push(`${hintPrefix} pick the next 1 task to do now.`);
+    hints.push('Pick the next 1 task to do now.');
   }
   if (sentences.length > 1) {
     hints.push('Capture any missing names/dates while it’s fresh.');
@@ -140,7 +138,7 @@ export function mockBrainDumpResult(opts: { transcript: string; sceneId: BrainDu
   return {
     sceneId: opts.sceneId,
     summaryBullets: summaryBullets.length ? summaryBullets : ['(No speech captured)'],
-    mindClearingHints: hints.length ? hints : ['Say one more sentence: “The next concrete step is …”'],
+    nextActions: hints.length ? hints : ['Say one more sentence: “The next concrete step is …”'],
     clarifyingQuestions,
     tasks,
     transcript,
