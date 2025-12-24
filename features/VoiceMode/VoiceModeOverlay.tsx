@@ -97,6 +97,18 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   const [anchorStyle, setAnchorStyle] = useState<{ left: number; width: number } | null>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // Always allow Escape to close the overlay.
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
     stageRef.current = stage;
   }, [stage]);
 

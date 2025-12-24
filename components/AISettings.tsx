@@ -18,7 +18,6 @@ export const AISettings = () => {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (e.defaultPrevented) return;
       setIsOpen(false);
     };
 

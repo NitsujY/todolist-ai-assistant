@@ -33,6 +33,17 @@ export const BrainDumpButton = () => {
   const config = loadAIPluginConfig();
   if (!config.voiceModeEnabled) return null;
 
+  // Reserve space for the fixed bottom bar so it doesn't overlap list content
+  // or bottom action bars (e.g. "Save Changes" in raw editor mode).
+  useEffect(() => {
+    const root = document.documentElement;
+    const barVisible = !isOpen;
+    root.style.setProperty('--ai-bottom-bar-offset', barVisible ? '64px' : '0px');
+    return () => {
+      root.style.setProperty('--ai-bottom-bar-offset', '0px');
+    };
+  }, [isOpen]);
+
   const persistedHistory = useMemo(() => readBrainDumpHistory(markdown), [markdown]);
 
   const openBrainDumpNew = () => {
