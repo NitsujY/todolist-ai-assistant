@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { VoiceModeOverlay } from '../features/VoiceMode/VoiceModeOverlay';
-import { Mic, Trash2 } from 'lucide-react';
+import { Mic, Pencil, Trash2 } from 'lucide-react';
 import { useTodoStore } from '../../../store/useTodoStore';
 import { loadAIPluginConfig } from '../utils/configStorage';
 import { appendToVoiceCaptureSection, extractLatestVoiceSession, getVoiceCaptureLines } from '../utils/voiceNotes';
@@ -25,6 +25,7 @@ export const BrainDumpButton = () => {
   const [systemPrompt, setSystemPrompt] = useState<string>('');
   const [includeCompletedInContext, setIncludeCompletedInContext] = useState<boolean>(true);
   const [demoTranscript, setDemoTranscript] = useState<string>('');
+  const [initialTypeInsteadOpen, setInitialTypeInsteadOpen] = useState(false);
 
   const pendingLinesRef = useRef<string[]>([]);
   const flushTimerRef = useRef<number | null>(null);
@@ -48,6 +49,7 @@ export const BrainDumpButton = () => {
 
   const openBrainDumpNew = () => {
     const latest = loadAIPluginConfig();
+    setInitialTypeInsteadOpen(false);
     setAutoStartOnOpen(true);
     setIsOpen(true);
     setStage('listening');
@@ -66,6 +68,7 @@ export const BrainDumpButton = () => {
     if (!h) return;
     // Open the Brain Dump page without starting analysis or auto-listening.
     // User can tap the mic control inside the overlay when they want.
+    setInitialTypeInsteadOpen(false);
     setAutoStartOnOpen(false);
     setIsOpen(true);
     setStage('done');
@@ -82,6 +85,24 @@ export const BrainDumpButton = () => {
   const openBrainDump = () => {
     if (persistedHistory) openBrainDumpResume();
     else openBrainDumpNew();
+  };
+
+  const openBrainDumpTyping = () => {
+    const latest = loadAIPluginConfig();
+    setInitialTypeInsteadOpen(true);
+    setAutoStartOnOpen(false);
+    setIsOpen(true);
+    setStage('listening');
+    sessionStartedRef.current = false;
+    setBrainDumpResult(null);
+    setSelectedTaskIds([]);
+    setKbText('');
+    setSystemPrompt('');
+    setSceneId((latest.brainDumpDefaultSceneId as BrainDumpSceneId) || 'brain-dump');
+    setIncludeCompletedInContext(latest.brainDumpIncludeCompletedByDefault ?? true);
+
+    const seeded = persistedHistory?.result.transcript || '';
+    setDemoTranscript(seeded);
   };
 
   const clearSavedSuggestions = async () => {
@@ -352,13 +373,26 @@ export const BrainDumpButton = () => {
     <>
       {!isOpen ? (
         <div className="fixed left-1/2 bottom-3 -translate-x-1/2 z-40 w-[min(48rem,calc(100vw-1.5rem))]">
-          <div className="border border-base-300 rounded-2xl bg-base-100 shadow-lg px-3 py-2 flex items-center justify-between gap-3">
+          <div
+            className="border border-base-300 rounded-2xl bg-base-100 shadow-lg px-3 py-2 flex items-center justify-between gap-3 cursor-pointer"
+            role="button"
+            tabIndex={0}
+            title="Start Brain Dump (voice)"
+            onClick={() => {
+              openBrainDumpNew();
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              openBrainDumpNew();
+            }}
+          >
             <div className="min-w-0">
               <div className="text-sm font-semibold truncate">Brain Dump</div>
               <div className="text-xs text-base-content/60 truncate">
                 {persistedHistory
                   ? `Saved — ${persistedHistory.result.tasks.length} suggestion${persistedHistory.result.tasks.length === 1 ? '' : 's'}`
-                  : 'Tap mic to start'}
+                  : 'Tap bar to start'}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -367,7 +401,8 @@ export const BrainDumpButton = () => {
                   type="button"
                   className="btn btn-ghost btn-sm btn-circle"
                   title="Clear saved suggestions"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     void clearSavedSuggestions();
                   }}
                 >
@@ -377,9 +412,22 @@ export const BrainDumpButton = () => {
 
               <button
                 type="button"
+                className="btn btn-ghost btn-sm btn-circle"
+                title="Type instead"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openBrainDumpTyping();
+                }}
+              >
+                <Pencil size={18} />
+              </button>
+
+              <button
+                type="button"
                 className="btn btn-sm btn-circle"
                 title="Open Brain Dump"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   openBrainDump();
                 }}
               >
@@ -395,6 +443,7 @@ export const BrainDumpButton = () => {
         onClose={() => {
           void flushPending();
           setIsOpen(false);
+          setInitialTypeInsteadOpen(false);
           // Minimize behavior: keep stage/results so reopening is instant.
         }}
         onFinalTranscript={handleFinalTranscript}
@@ -405,6 +454,7 @@ export const BrainDumpButton = () => {
         stage={stage}
         anchorId="todo-list-shell"
         autoStartListening={autoStartOnOpen}
+        initialTypeInsteadOpen={initialTypeInsteadOpen}
 
         brainDumpEnabled={true}
         sceneId={sceneId}

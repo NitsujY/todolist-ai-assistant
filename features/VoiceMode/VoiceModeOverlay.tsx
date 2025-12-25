@@ -16,6 +16,8 @@ interface VoiceModeOverlayProps {
   stage?: 'listening' | 'processing' | 'done';
   anchorId?: string;
   autoStartListening?: boolean;
+  /** When opening, start with the "Use typing" panel expanded. */
+  initialTypeInsteadOpen?: boolean;
 
   // Brain Dump (UI preview) – optional
   brainDumpEnabled?: boolean;
@@ -56,6 +58,7 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   stage = 'listening',
   anchorId,
   autoStartListening = true,
+  initialTypeInsteadOpen = false,
 
   brainDumpEnabled = false,
   sceneId: _sceneId,
@@ -304,6 +307,21 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
       }
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTypeInsteadOpen(initialTypeInsteadOpen);
+    } else {
+      setTypeInsteadOpen(false);
+    }
+  }, [isOpen, initialTypeInsteadOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!typeInsteadOpen) return;
+    // Focus after render so the textarea exists.
+    window.setTimeout(() => typingTextareaRef.current?.focus(), 0);
+  }, [isOpen, typeInsteadOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
