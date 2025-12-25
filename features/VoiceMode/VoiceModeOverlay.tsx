@@ -315,27 +315,9 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, anchorId]);
 
-  const autosizeTypingTextarea = () => {
-    const el = typingTextareaRef.current;
-    if (!el) return;
-    // Reset then measure to fit content without inner scrolling.
-    el.style.height = '0px';
-    el.style.height = `${el.scrollHeight}px`;
-  };
-
-  useEffect(() => {
-    if (!isOpen) return;
-    if (!typeInsteadOpen) return;
-    // Defer a tick so layout is stable (details open / content mounted).
-    window.setTimeout(() => autosizeTypingTextarea(), 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, typeInsteadOpen]);
-
-  useEffect(() => {
-    if (!typeInsteadOpen) return;
-    autosizeTypingTextarea();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoTranscript, typeInsteadOpen]);
+  // Note: we intentionally do not autosize the textarea. Autosizing tends to
+  // create jumpy layout and multiple scroll regions. Instead we give the editor
+  // a stable, generous height and keep scrolling inside the textarea.
 
   if (!isOpen) return null;
 
@@ -387,6 +369,9 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   if (brainDumpEnabled) {
     const showResults = !isListening && stage === 'done' && !!brainDumpResult;
     const isDesktopReviewFullScreen = !isMobile && stage === 'done' && !isListening;
+    const showTranscriptPanel = showTranscript && !typeInsteadOpen;
+    const showResultsPanel = showResults && !typeInsteadOpen;
+    const isFullScreen = isMobile || isDesktopReviewFullScreen;
 
     return (
       <div className="fixed inset-0 z-50">
@@ -400,15 +385,21 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
 
         <div
           className={
-            isMobile || isDesktopReviewFullScreen
+            isFullScreen
               ? 'absolute inset-0 bg-base-100 flex flex-col'
               : 'absolute left-1/2 bottom-0 -translate-x-1/2 w-full max-w-3xl bg-base-100 flex flex-col border border-base-300 rounded-t-2xl shadow-2xl'
           }
           style={
-            isMobile || isDesktopReviewFullScreen
+            isFullScreen
               ? undefined
               : {
-                  maxHeight: '50vh',
+                  // Desktop capture uses a bottom-sheet. When typing is open, give
+                  // the editor substantially more room without exceeding the screen.
+                  maxHeight: typeInsteadOpen ? '85vh' : '50vh',
+                  // Note: maxHeight alone allows the sheet to shrink to content.
+                  // When typing is open we want the editor to visibly fill the view,
+                  // so we pin the sheet height to the same value.
+                  height: typeInsteadOpen ? '85vh' : undefined,
                 }
           }
         >
@@ -434,10 +425,16 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
           </button>
         </div>
 
-        {/* Content: keep capture view clean; reserve space for the floating controls */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 pb-4 space-y-3">
-          {showTranscript ? (
-            <div className="border border-base-300 rounded-xl px-3 py-3 bg-base-200/30">
+        {/* Content: avoid whole-page scroll; keep a single scroll area */}
+        <div
+          className={`flex-1 flex flex-col gap-3 px-4 py-3 ${typeInsteadOpen ? 'pb-2 overflow-hidden' : 'pb-4 overflow-y-auto'} min-h-0`}
+        >
+          {showTranscriptPanel ? (
+            <div
+              className={`border border-base-300 rounded-xl px-3 py-3 bg-base-200/30 shrink-0 ${
+                typeInsteadOpen ? 'max-h-[8vh] overflow-hidden' : 'overflow-hidden'
+              }`}
+            >
               <div className="text-sm text-base-content/90 whitespace-pre-wrap break-words">{displayTranscript || (micSupportError ? '' : '…')}</div>
               {!isListening ? (
                 <div className="text-xs text-base-content/60 mt-2">
@@ -453,8 +450,8 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
             </div>
           ) : null}
 
-          {showResults ? (
-            <div className="space-y-3">
+          {showResultsPanel ? (
+            <div className={`space-y-3 ${typeInsteadOpen ? 'shrink-0 max-h-[8vh] overflow-hidden' : 'shrink-0'}`}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="border border-base-300 rounded-xl p-3 bg-base-100">
                   <div className="flex items-center justify-between gap-2">
@@ -521,71 +518,97 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
           ) : null}
 
           {/* Typing mode: lets the user edit the same input as voice (collapsed by default). */}
-          <details
-            className="border border-base-300 rounded-xl p-3 bg-base-100"
-            onToggle={(e) => {
-              const el = e.currentTarget as HTMLDetailsElement;
-              setTypeInsteadOpen(el.open);
-              if (!el.open) return;
-              // If the user chooses to type, pause the mic.
-              pauseForTyping();
+          <div className={typeInsteadOpen ? 'flex-1 min-h-0 flex flex-col' : 'shrink-0'}>
+            <div className={`border border-base-300 rounded-xl p-3 bg-base-100 ${typeInsteadOpen ? 'flex flex-col min-h-0 flex-1' : ''}`}>
+              <button
+                type="button"
+                className="w-full flex items-center justify-between gap-2"
+                onClick={() => {
+                  setTypeInsteadOpen(prev => {
+                    const nextOpen = !prev;
+                    if (nextOpen) {
+                      // If the user chooses to type, pause the mic.
+                      pauseForTyping();
 
-              // If there isn't typed input yet, seed it from the current transcript so typing
-              // feels like editing the same input (true combined input).
-              if (!(demoTranscript ?? '').trim()) {
-                const seeded = displayTranscript.trim();
-                if (seeded) onDemoTranscriptChange?.(seeded);
-              }
-            }}
-          >
-            <summary className="cursor-pointer text-xs font-semibold text-base-content/70 uppercase tracking-wider">Use typing</summary>
-            <div className="mt-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Edit input</div>
-                <div className="flex items-center gap-2">
-                  <div className="text-xs text-base-content/50">
-                    {stage === 'processing'
-                      ? 'Analyzing…'
-                      : stage === 'done'
-                        ? 'Edit and update results'
-                        : 'Type, then finish'}
+                      // If there isn't typed input yet, seed it from the current transcript so typing
+                      // feels like editing the same input (true combined input).
+                      if (!(demoTranscript ?? '').trim()) {
+                        const seeded = displayTranscript.trim();
+                        if (seeded) onDemoTranscriptChange?.(seeded);
+                      }
+                    }
+                    return nextOpen;
+                  });
+                }}
+              >
+                <span className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Use typing</span>
+                <span className="text-xs text-base-content/50 select-none">{typeInsteadOpen ? '▾' : '▸'}</span>
+              </button>
+
+              {typeInsteadOpen ? (
+                <div className="mt-3 flex flex-col min-h-0 flex-1 overflow-hidden">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Edit input</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-base-content/50">
+                        {stage === 'processing'
+                          ? 'Analyzing…'
+                          : stage === 'done'
+                            ? 'Edit and update results'
+                            : 'Type, then finish'}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-outline"
+                        onClick={handleAnalyze}
+                        disabled={!onAnalyze || stage === 'processing' || !(demoTranscript ?? '').trim()}
+                        title={stage === 'done' ? 'Update results from typed text' : 'Finish and analyze typed text'}
+                      >
+                        {stage === 'done' ? 'Update results' : 'Finish'}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-xs btn-outline"
-                    onClick={handleAnalyze}
-                    disabled={!onAnalyze || stage === 'processing' || !(demoTranscript ?? '').trim()}
-                    title={stage === 'done' ? 'Update results from typed text' : 'Finish and analyze typed text'}
-                  >
-                    {stage === 'done' ? 'Update results' : 'Finish'}
-                  </button>
+                  <textarea
+                    ref={typingTextareaRef}
+                    className="textarea textarea-bordered w-full mt-2 resize-none overflow-y-auto overscroll-contain touch-pan-y flex-1 min-h-0 h-full"
+                    // Let flexbox constrain height so the bottom controls never overlap.
+                    // Scrolling stays inside the textarea.
+                    style={
+                      {
+                        WebkitOverflowScrolling: 'touch',
+                        height: '100%',
+                        maxHeight: '100%',
+                        flex: '1 1 auto',
+                      } as React.CSSProperties
+                    }
+                    value={demoTranscript ?? ''}
+                    onChange={(e) => {
+                      onDemoTranscriptChange?.(e.target.value);
+                    }}
+                    onWheel={(e) => {
+                      // Keep scrolling inside the editor (avoid trapping the wheel on the overlay).
+                      e.stopPropagation();
+                    }}
+                    onTouchMove={(e) => {
+                      // Same as wheel: prevent the overlay from eating the scroll gesture.
+                      e.stopPropagation();
+                    }}
+                    onFocus={() => {
+                      // Safety: focusing the editor should always stop the mic.
+                      pauseForTyping();
+                    }}
+                    placeholder="Type or edit your brain dump input…"
+                  />
                 </div>
-              </div>
-              <textarea
-                ref={typingTextareaRef}
-                className={`textarea textarea-bordered w-full mt-2 overflow-y-hidden ${
-                  stage === 'done' ? 'min-h-[35vh] sm:min-h-[40vh]' : 'min-h-[160px] sm:min-h-[220px]'
-                }`}
-                value={demoTranscript ?? ''}
-                onChange={(e) => {
-                  onDemoTranscriptChange?.(e.target.value);
-                  // Keep it feeling like a single scroll area.
-                  window.setTimeout(() => autosizeTypingTextarea(), 0);
-                }}
-                onFocus={() => {
-                  // Safety: focusing the editor should always stop the mic.
-                  pauseForTyping();
-                }}
-                placeholder="Type or edit your brain dump input…"
-              />
+              ) : null}
             </div>
-          </details>
+          </div>
         </div>
 
         {/* Fixed bottom controls (no overlap with transcript) */}
-        <div className="border-t border-base-200 px-4 py-3">
+        <div className={`border-t border-base-200 px-4 ${typeInsteadOpen ? 'py-2' : 'py-3'}`}>
           {/* Single primary action when paused (no A/B buttons) */}
-          {!isListening && stage !== 'processing' && stage !== 'done' ? (
+          {!typeInsteadOpen && !isListening && stage !== 'processing' && stage !== 'done' ? (
             <button
               type="button"
               className="btn btn-primary w-full mb-3"
@@ -597,12 +620,12 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
             </button>
           ) : null}
 
-          <div className="relative h-20 flex items-center">
+          <div className={`relative ${typeInsteadOpen ? 'h-14' : 'h-20'} flex items-center`}>
             {/* Center mic control stays centered even when Finish is visible */}
             <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
               <button
                 type="button"
-                className={`btn btn-circle btn-primary w-16 h-16 ${stage === 'processing' ? 'btn-disabled' : ''}`}
+                className={`btn btn-circle btn-primary ${typeInsteadOpen ? 'w-12 h-12' : 'w-16 h-16'} ${stage === 'processing' ? 'btn-disabled' : ''}`}
                 onClick={() => {
                   if (stage === 'processing') return;
                   if (isListening) {
@@ -614,7 +637,7 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
                 aria-label={isListening ? 'Pause recording' : 'Continue recording'}
                 title={isListening ? 'Pause' : 'Continue'}
               >
-                {isListening ? <Pause size={22} /> : <Mic size={22} />}
+                {isListening ? <Pause size={typeInsteadOpen ? 18 : 22} /> : <Mic size={typeInsteadOpen ? 18 : 22} />}
               </button>
 
               <div className="text-xs text-base-content/70">
