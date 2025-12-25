@@ -68,6 +68,14 @@ const coerceTasks = (value: unknown): BrainDumpTaskSuggestion[] => {
     const title = getString(v, 'title');
     if (!title) continue;
 
+    const subtasksRaw = v['subtasks'];
+    const subtasks = Array.isArray(subtasksRaw)
+      ? subtasksRaw
+          .map((x: unknown) => (typeof x === 'string' ? x.trim() : ''))
+          .filter(Boolean)
+          .slice(0, 8)
+      : undefined;
+
     const rawTags = v['tags'];
     const tags = Array.isArray(rawTags)
       ? rawTags
@@ -87,6 +95,7 @@ const coerceTasks = (value: unknown): BrainDumpTaskSuggestion[] => {
     out.push({
       id: `t_${Math.random().toString(16).slice(2)}`,
       title,
+      subtasks: subtasks?.length ? subtasks : undefined,
       tags: tags?.length ? tags : undefined,
       dueDate,
       confidence,
@@ -144,14 +153,16 @@ const buildBrainDumpPrompt = (args: {
     '  "summaryBullets": string[]  // 1-5 bullets, short, no trailing punctuation preference ok',
     '  "nextActions": string[]     // 0-3 concrete do-able steps, verb-led',
     '  "clarifyingQuestions": { "question": string, "choices"?: string[] }[] // 0-2',
-    '  "tasks": { "title": string, "tags"?: string[], "dueDate"?: "YYYY-MM-DD" }[]',
+    '  "tasks": { "title": string, "subtasks"?: string[], "tags"?: string[], "dueDate"?: "YYYY-MM-DD" }[]',
     '  "sourceText": string',
     '}',
     '',
     'Quality bar for tasks:',
     '- Each task is meaningful and do-able (not vague).',
     '- Start titles with a verb.',
-    '- Keep tasks small enough to complete without needing another task to define it.',
+    '- Prefer fewer top-level tasks by grouping related steps as subtasks under a parent task.',
+    '- Use subtasks for 2-6 concrete steps when a parent task makes sense (this keeps the todo list clean).',
+    '- Avoid creating a separate top-level task for every small step when they belong under one parent.',
     '- Only set dueDate if the user explicitly provided a YYYY-MM-DD date.',
     '',
     'Atomic input rule:',

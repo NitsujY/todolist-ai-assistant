@@ -272,7 +272,12 @@ export const BrainDumpButton = () => {
     const store = useTodoStore.getState();
 
     const configForApply = loadAIPluginConfig();
-    const suggestions = toApply.map(t => formatTaskText(t));
+    const suggestions = toApply.map(t => {
+      const base = formatTaskText(t);
+      if (!t.subtasks?.length) return base;
+      const lines = t.subtasks.map(s => `- ${s}`).join('\n');
+      return `${base}\nSubtasks:\n${lines}`;
+    });
 
     const applyAction = async (action: TaskMergeAction) => {
       const currentTasks = useTodoStore.getState().tasks;
@@ -333,15 +338,37 @@ export const BrainDumpButton = () => {
           await applyAction(action);
         }
       } else {
-        // Fallback: old behavior
+        // Fallback: preserve parent+subtasks locally.
         for (const t of toApply) {
-          await store.addTask(formatTaskText(t));
+          const beforeIds = new Set(useTodoStore.getState().tasks.map(x => x.id));
+          const title = formatTaskText(t);
+          await store.addTask(title);
+
+          if (t.subtasks?.length) {
+            const afterTasks = useTodoStore.getState().tasks;
+            const created = afterTasks.find(x => !beforeIds.has(x.id) && x.text === title) || afterTasks.find(x => !beforeIds.has(x.id));
+            if (created) {
+              const subtaskBlock = t.subtasks.map(s => `- [ ] ${s}`).join('\n');
+              await store.updateTaskDescription(created.id, subtaskBlock);
+            }
+          }
         }
       }
     } catch (e) {
       console.error('Task merge plan failed, falling back to addTask', e);
       for (const t of toApply) {
-        await store.addTask(formatTaskText(t));
+        const beforeIds = new Set(useTodoStore.getState().tasks.map(x => x.id));
+        const title = formatTaskText(t);
+        await store.addTask(title);
+
+        if (t.subtasks?.length) {
+          const afterTasks = useTodoStore.getState().tasks;
+          const created = afterTasks.find(x => !beforeIds.has(x.id) && x.text === title) || afterTasks.find(x => !beforeIds.has(x.id));
+          if (created) {
+            const subtaskBlock = t.subtasks.map(s => `- [ ] ${s}`).join('\n');
+            await store.updateTaskDescription(created.id, subtaskBlock);
+          }
+        }
       }
     }
 
@@ -349,6 +376,25 @@ export const BrainDumpButton = () => {
     // persistent bottom bar backed by markdown history.
     setStage('done');
     setIsOpen(false);
+  };
+
+  const applyNextActions = async () => {
+    if (!brainDumpResult) return;
+    const nextActions = (brainDumpResult.nextActions || []).map(x => x.trim()).filter(Boolean);
+    if (nextActions.length === 0) return;
+
+    const store = useTodoStore.getState();
+    const beforeIds = new Set(store.tasks.map(t => t.id));
+    const date = new Date().toISOString().slice(0, 10);
+    const parentTitle = `Brain Dump next actions (${date})`;
+
+    await store.addTask(parentTitle);
+    const afterTasks = useTodoStore.getState().tasks;
+    const created = afterTasks.find(t => !beforeIds.has(t.id) && t.text === parentTitle) || afterTasks.find(t => !beforeIds.has(t.id));
+    if (!created) return;
+
+    const subtaskBlock = nextActions.map(s => `- [ ] ${s}`).join('\n');
+    await store.updateTaskDescription(created.id, subtaskBlock);
   };
 
   const contextPreviewLines = useMemo(() => {
@@ -379,12 +425,14 @@ export const BrainDumpButton = () => {
             tabIndex={0}
             title="Start Brain Dump (voice)"
             onClick={() => {
-              openBrainDumpNew();
+              // If there are saved results, resume the analysis screen.
+              // Otherwise start a fresh voice capture session.
+              openBrainDump();
             }}
             onKeyDown={(e) => {
               if (e.key !== 'Enter' && e.key !== ' ') return;
               e.preventDefault();
-              openBrainDumpNew();
+              openBrainDump();
             }}
           >
             <div className="min-w-0">
@@ -464,6 +512,7 @@ export const BrainDumpButton = () => {
         selectedTaskIds={selectedTaskIds}
         onToggleTaskSelected={toggleTaskSelected}
         onApplySelectedTasks={applySelectedTasks}
+        onApplyNextActions={applyNextActions}
         kbText={kbText}
         onKbTextChange={setKbText}
         contextPreviewLines={contextPreviewLines}

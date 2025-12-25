@@ -28,6 +28,7 @@ interface VoiceModeOverlayProps {
   selectedTaskIds?: string[];
   onToggleTaskSelected?: (taskId: string) => void;
   onApplySelectedTasks?: () => void;
+  onApplyNextActions?: () => void;
   kbText?: string;
   onKbTextChange?: (next: string) => void;
   contextPreviewLines?: string[];
@@ -68,6 +69,7 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   selectedTaskIds,
   onToggleTaskSelected,
   onApplySelectedTasks,
+  onApplyNextActions,
   kbText: _kbText,
   onKbTextChange: _onKbTextChange,
   contextPreviewLines: _contextPreviewLines,
@@ -502,6 +504,13 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
                             />
                             <div className="min-w-0">
                               <div className="text-sm text-base-content/90 break-words">{t.title}</div>
+                              {t.subtasks?.length ? (
+                                <ul className="mt-1 text-xs text-base-content/70 list-disc pl-5 space-y-0.5">
+                                  {t.subtasks.slice(0, 6).map((s, i) => (
+                                    <li key={`${t.id}_st_${i}`} className="break-words">{s}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
                               {(t.tags?.length || t.dueDate) ? (
                                 <div className="text-xs text-base-content/60 flex flex-wrap gap-2">
                                   {t.tags?.length ? <span>{t.tags.map(x => `#${x}`).join(' ')}</span> : null}
@@ -517,7 +526,18 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
                 </div>
 
                 <div className="border border-base-300 rounded-xl p-3 bg-base-100">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">Next actions</div>
+                    <button
+                      className="btn btn-xs btn-outline"
+                      onClick={() => onApplyNextActions?.()}
+                      disabled={!onApplyNextActions || !brainDumpResult.nextActions?.length}
+                      title="Add next actions to your todo list"
+                      type="button"
+                    >
+                      Add
+                    </button>
+                  </div>
                   <div className="mt-2 space-y-3">
                     <ul className="text-sm text-base-content/80 list-disc pl-5 space-y-1">
                       {brainDumpResult.summaryBullets.map((b, i) => (

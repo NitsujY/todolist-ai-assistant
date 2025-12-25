@@ -3,6 +3,8 @@ export type BrainDumpSceneId = 'brain-dump' | 'project-brainstorm' | 'dev-todo' 
 export type BrainDumpTaskSuggestion = {
   id: string;
   title: string;
+  /** Optional subtasks to keep the top-level list clean. */
+  subtasks?: string[];
   tags?: string[];
   dueDate?: string; // YYYY-MM-DD
   confidence?: number; // 0..1
