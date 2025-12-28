@@ -16,6 +16,7 @@ export const BrainDumpButton = () => {
   const updateMarkdown = useTodoStore(state => state.updateMarkdown);
   const [stage, setStage] = useState<'listening' | 'processing' | 'done'>('listening');
   const tasks = useTodoStore(state => state.tasks);
+  const pluginConfig = useTodoStore(state => state.pluginConfig);
   const [autoStartOnOpen, setAutoStartOnOpen] = useState(true);
 
   const [sceneId, setSceneId] = useState<BrainDumpSceneId>('brain-dump');
@@ -31,19 +32,22 @@ export const BrainDumpButton = () => {
   const flushTimerRef = useRef<number | null>(null);
   const sessionStartedRef = useRef(false);
 
-  const config = loadAIPluginConfig();
-  if (!config.voiceModeEnabled) return null;
-
+  const config = useMemo(() => loadAIPluginConfig(), [pluginConfig]);
+  
   // Reserve space for the fixed bottom bar so it doesn't overlap list content
   // or bottom action bars (e.g. "Save Changes" in raw editor mode).
   useEffect(() => {
+    if (!config.voiceModeEnabled) {
+      document.documentElement.style.setProperty('--ai-bottom-bar-offset', '0px');
+      return;
+    }
     const root = document.documentElement;
     const barVisible = !isOpen;
     root.style.setProperty('--ai-bottom-bar-offset', barVisible ? '64px' : '0px');
     return () => {
       root.style.setProperty('--ai-bottom-bar-offset', '0px');
     };
-  }, [isOpen]);
+  }, [isOpen, config.voiceModeEnabled]);
 
   const persistedHistory = useMemo(() => readBrainDumpHistory(markdown), [markdown]);
 
@@ -414,6 +418,8 @@ export const BrainDumpButton = () => {
       .map(l => `System: ${l}`);
     return [...promptLines, ...kbLines, ...titles];
   }, [tasks, kbText, includeCompletedInContext, systemPrompt]);
+
+  if (!config.voiceModeEnabled) return null;
 
   return (
     <>

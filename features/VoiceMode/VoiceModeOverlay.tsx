@@ -62,27 +62,14 @@ export const VoiceModeOverlay: React.FC<VoiceModeOverlayProps> = ({
   initialTypeInsteadOpen = false,
 
   brainDumpEnabled = false,
-  sceneId: _sceneId,
-  onSceneChange: _onSceneChange,
-  sceneLabelOverrides: _sceneLabelOverrides,
   brainDumpResult,
   selectedTaskIds,
   onToggleTaskSelected,
   onApplySelectedTasks,
   onApplyNextActions,
-  kbText: _kbText,
-  onKbTextChange: _onKbTextChange,
-  contextPreviewLines: _contextPreviewLines,
 
   demoTranscript,
   onDemoTranscriptChange,
-  onGeneratePreview: _onGeneratePreview,
-
-  includeCompletedInContext: _includeCompletedInContext,
-  onIncludeCompletedInContextChange: _onIncludeCompletedInContextChange,
-
-  systemPrompt: _systemPrompt,
-  onSystemPromptChange: _onSystemPromptChange,
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [finalTranscript, setFinalTranscript] = useState('');

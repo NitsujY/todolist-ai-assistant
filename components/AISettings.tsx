@@ -10,10 +10,6 @@ export const AISettings = () => {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   useEffect(() => {
-    setConfig(loadAIPluginConfig());
-  }, []);
-
-  useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
