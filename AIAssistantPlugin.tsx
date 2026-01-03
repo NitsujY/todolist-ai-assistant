@@ -15,7 +15,11 @@ export const AIAssistantPlugin: Plugin = {
   },
 
   renderTaskActionButton: (task) => {
-    return <TaskBreakdownButton task={task} />;
+    return (
+      <span className="contents" data-task-action="breakdown">
+        <TaskBreakdownButton task={task} />
+      </span>
+    );
   },
 
   renderSettings: () => {
