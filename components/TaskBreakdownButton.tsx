@@ -78,11 +78,12 @@ export function TaskBreakdownButton({ task }: { task: Task }) {
   return (
     <>
       <button
-        className="btn btn-ghost btn-xs btn-circle text-base-content/40 hover:text-primary"
+        className="btn btn-xs btn-ghost gap-1 text-base-content/60 font-normal"
         title="Break down task"
         onClick={open}
       >
         <Wand2 size={16} />
+        Break down
       </button>
 
       {isOpen && (
