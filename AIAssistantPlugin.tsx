@@ -10,8 +10,18 @@ export const AIAssistantPlugin: Plugin = {
   // description: 'AI-powered features including Voice Mode and Smart Tags.',
   // author: 'Justin Yu',
   
-  renderHeaderButton: () => {
+  // Mount the Brain Dump bottom bar persistently.
+  // It must not be tied to sidebar hover/collapse or overflow menus.
+  renderGlobal: () => {
     return <BrainDumpButton />;
+  },
+
+  renderDashboard: () => {
+    return null;
+  },
+
+  renderHeaderButton: () => {
+    return null;
   },
 
   renderTaskActionButton: (task) => {

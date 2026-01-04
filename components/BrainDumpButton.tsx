@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { VoiceModeOverlay } from '../features/VoiceMode/VoiceModeOverlay';
 import { Mic, Pencil, Trash2 } from 'lucide-react';
 import { useTodoStore } from '../../../store/useTodoStore';
@@ -36,14 +36,18 @@ export const BrainDumpButton = () => {
   
   // Reserve space for the fixed bottom bar so it doesn't overlap list content
   // or bottom action bars (e.g. "Save Changes" in raw editor mode).
-  useEffect(() => {
+  // Use layout effect to avoid a one-frame overlap/flicker.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+
     if (!config.voiceModeEnabled) {
-      document.documentElement.style.setProperty('--ai-bottom-bar-offset', '0px');
+      root.style.setProperty('--ai-bottom-bar-offset', '0px');
       return;
     }
-    const root = document.documentElement;
+
     const barVisible = !isOpen;
     root.style.setProperty('--ai-bottom-bar-offset', barVisible ? '64px' : '0px');
+
     return () => {
       root.style.setProperty('--ai-bottom-bar-offset', '0px');
     };
